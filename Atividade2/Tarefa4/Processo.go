@@ -12,9 +12,9 @@ import (
 var err error
 var myProcess int
 var myPort string
-var allPorts [4] string
+var allPorts [] string
 var nServers int
-var CliConn [3]*net.UDPConn
+var CliConn []*net.UDPConn
 var ServConn *net.UDPConn
 
 var logicalClock int
@@ -75,9 +75,13 @@ func initConnections() {
 	CheckError(err)
 	myPort = os.Args[myProcess + 1]
 	nServers = len(os.Args) - 2
+
+	allPorts = make([]string, nServers + 1)
 	for i:=1; i <= nServers; i++ {
 		allPorts[i] = os.Args[i + 1]
 	}
+
+	CliConn = make([]*net.UDPConn, nServers + 1)
 
 	ServerAddr, err := net.ResolveUDPAddr("udp", ":" + myPort)
 	CheckError(err)

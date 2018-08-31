@@ -12,7 +12,7 @@ import (
 var err string
 var myPort string
 var nServers int
-var CliConn [2]*net.UDPConn
+var CliConn []*net.UDPConn
 
 var ServConn *net.UDPConn
 
@@ -20,12 +20,6 @@ func CheckError(err error) {
     if err  != nil {
         fmt.Println("Error: ", err)
     }
-}
-
-func PrintError(err error) {
-	if err != nil {
-		fmt.Println("Erro: ", err)
-	}
 }
 
 func readInput(ch chan string) {
@@ -61,6 +55,8 @@ func doClientJob(otherProcess int, i int) {
 func initConnections() {
 	myPort = os.Args[1]
 	nServers = len(os.Args) - 2
+
+	CliConn = make([]*net.UDPConn, nServers)
 
 	ServerAddr, err := net.ResolveUDPAddr("udp", ":" + myPort)
 	CheckError(err)
