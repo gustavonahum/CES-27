@@ -13,9 +13,9 @@ import (
 var err error
 var myProcess int
 var myPort string
-var allPorts [4] string
+var allPorts [] string
 var nServers int
-var CliConn [3]*net.UDPConn
+var CliConn []*net.UDPConn
 var ServerAddr *net.UDPAddr
 var ServConn *net.UDPConn
 
@@ -45,7 +45,7 @@ func readInput(ch chan string) {
 	}
 }
 
-func doServerJob() {
+func doServerJob(vecClock VectorClock) {
     buf := make([]byte, 1024)
 
     n,_,err := ServConn.ReadFromUDP(buf[0:])
@@ -56,23 +56,48 @@ func doServerJob() {
     var receivedVectorClock VectorClock
     err = json.Unmarshal(buf[:n], &receivedVectorClock)
     CheckError(err)
-    //updateClock(&myVectorClock, &receivedVectorClock)
+
     fmt.Println(receivedVectorClock.MyProc)
-	fmt.Printf("Meu novo vector clock: (%d", receivedVectorClock.AllProcessesClocks[1])
-	for process := 2; process < nServers; process++ {
+	fmt.Printf("Relogio vetorial recebido: (%d", receivedVectorClock.AllProcessesClocks[1])
+	for process := 2; process <= nServers; process++ {
 		fmt.Printf(", ")
 		fmt.Printf("%d", receivedVectorClock.AllProcessesClocks[process])
 	}
 	fmt.Printf(")\n")
-    //myVectorClock = receivedVectorClock
+
+	for process := 1; process <= nServers; process++ {
+		if receivedVectorClock.AllProcessesClocks[process] > vecClock.AllProcessesClocks[process] {
+			if process == vecClock.MyProc {
+				vecClock.AllProcessesClocks[process] = 1 + receivedVectorClock.AllProcessesClocks[process]
+			} else {
+				vecClock.AllProcessesClocks[process] = receivedVectorClock.AllProcessesClocks[process]
+			}
+		} else {
+			if process == vecClock.MyProc {
+				vecClock.AllProcessesClocks[process] = 1 + vecClock.AllProcessesClocks[process]
+			} else {
+				vecClock.AllProcessesClocks[process] = vecClock.AllProcessesClocks[process]
+			}
+		}
+	}
+	
+	fmt.Printf("Meu relogio vetorial atualizado: (%d", vecClock.AllProcessesClocks[1])
+	for process := 2; process <= nServers; process++ {
+		fmt.Printf(", ")
+		fmt.Printf("%d", vecClock.AllProcessesClocks[process])
+	}
+	fmt.Printf(")\n")
 }
 
 func doClientJob(otherProcess int, vecClock VectorClock) {
-	fmt.Println(vecClock.MyProc)
-	fmt.Println("vecclockallpr", vecClock.AllProcessesClocks[1])
-	fmt.Println("vecclockallpr", vecClock.AllProcessesClocks[2])
-    jsonRequest, err := json.Marshal(vecClock)
-    os.Stdout.Write(jsonRequest)
+	fmt.Printf("Estou enviando meu vector clock: (%d", vecClock.AllProcessesClocks[1])
+	for process := 2; process <= nServers; process++ {
+		fmt.Printf(", ")
+		fmt.Printf("%d", vecClock.AllProcessesClocks[process])
+	}
+	fmt.Printf(")\n")
+
+	jsonRequest, err := json.Marshal(vecClock)
     _,err = CliConn[otherProcess].Write(jsonRequest)
     if err != nil {
         fmt.Println("Error: ", err)
@@ -85,9 +110,13 @@ func initConnections() {
 	CheckError(err)
 	myPort = os.Args[myProcess + 1]
 	nServers = len(os.Args) - 2
+
+	allPorts = make([]string, nServers + 1)
 	for i:=1; i <= nServers; i++ {
 		allPorts[i] = os.Args[i + 1]
 	}
+
+	CliConn = make([]*net.UDPConn, nServers + 1)
 
 	ServerAddr, err = net.ResolveUDPAddr("udp", ":" + myPort)
 	CheckError(err)
@@ -116,18 +145,16 @@ func main() {
 		}	
 	}
 
-	i := 0
 	ch := make(chan string)
 	go readInput(ch)
 	myVectorClock := VectorClock {
 		myProcess,
 		make([]int, nServers + 1),
 	}
-	fmt.Println(myVectorClock.MyProc)
 	myVectorClock.AllProcessesClocks[myProcess] =1
 
 	for {
-		go doServerJob()
+		go doServerJob(myVectorClock)
 		select {
 		case x, valid := <-ch:
 			if valid {
@@ -140,7 +167,6 @@ func main() {
 					}
 					fmt.Printf(")\n");
 				} else if _, err := strconv.Atoi(x); err == nil {
-					fmt.Printf("Estou enviando meu vector clock\n")
 					x, err := strconv.Atoi(x)
 					CheckError(err)
 					go doClientJob(x, myVectorClock)
@@ -152,6 +178,5 @@ func main() {
 			time.Sleep(time.Second * 1)
 		}
 		time.Sleep(time.Second * 1)
-		i++
 	}
 }
